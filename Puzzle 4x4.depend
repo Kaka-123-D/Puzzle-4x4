@@ -1,0 +1,12 @@
+# depslib dependency file v1.0
+1589089840 source:c:\users\dghfhf\desktop\puzzle 4x4\main.cpp
+	<iostream>
+	<ctime>
+	<cstdlib>
+	<SDL.h>
+	<SDL_image.h>
+	<SDL_ttf.h>
+	<vector>
+	<string>
+	<sstream>
+
