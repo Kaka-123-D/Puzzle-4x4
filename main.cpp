@@ -1,5 +1,3 @@
-
-
 #include <iostream>
 #include <ctime>
 #include <cstdlib>
@@ -12,7 +10,6 @@
 
 using namespace std;
 
-int turn_move = 0;
 bool again = true;
 int num_line = 3;
 
@@ -62,9 +59,8 @@ struct Game
    celltable cells;
    cellPos first_click;
    cellPos last_click;
-
+   int turn_move;
 };
-
 
 struct graphic
 {
@@ -87,7 +83,7 @@ void initSpriteRects(vector<SDL_Rect> &rects); // luu vi tri cac hinh trong anh 
 
 void initGame(Game &game); // khoi tao game va cac o xep ngau nhien
 
-void draw(Game &game, graphic &g);  // hien thi game len cua so
+void drawGame(Game &game, graphic &g);  // hien thi game len cua so
 
 SDL_Rect getSpriteRect (const Game &game, const cellPos &pos, const vector<SDL_Rect> &spriteRects); // lay hinh se ve cho o o vi tri pos
 
@@ -95,13 +91,17 @@ void updateGame(Game &game, SDL_Event &event); // cap nhat game khi co thao tac
 
 bool check_win(Game &game);  // return true neu win///
 
-void draw_text(graphic &g, string text, int x, int y);
+void draw_text(graphic &g, Game &game, string text, int x, int y);
+
+void draw_illustration(graphic &g);
 
 void drawline(graphic &g);
 
 void drawline_2(graphic &g);
 
 string randomSprite(); //chon ngau nhien anh de choi
+
+void autoWin(Game &game, SDL_Event &event);
 
 //////////////////////ham main
 ///////////////////////////////////
@@ -129,7 +129,7 @@ int main(int argc, char* argv[])
         bool running = true;
         while (running)
             {
-                draw(game, g);
+                drawGame(game, g);
 
                 SDL_Event event;
                 while (SDL_PollEvent(&event))
@@ -144,11 +144,13 @@ int main(int argc, char* argv[])
                           if (check_win(game) and event.type == SDL_KEYDOWN and event.key.keysym.sym == SDLK_RETURN)
                           {
                               running = false;
-                              turn_move = 0;
+                              game.turn_move = 0;
                               break;
                           }
 
-                          updateGame(game, event);
+                          if (event.type == SDL_KEYDOWN and event.key.keysym.sym == SDLK_LCTRL) autoWin(game, event);
+                          else updateGame(game, event);
+
                       }
             }
         close(g);
@@ -360,11 +362,11 @@ void initSpriteRects(vector<SDL_Rect> &rects)
     SDL_Rect rect {0,0,500,500};
     rects.push_back(rect);
 
-
 }
 
 void initGame(Game &game)
 {
+    game.turn_move = 0;
     game.cells = celltable(4, vector<int> (4));
 
     bool choose[17];
@@ -387,14 +389,13 @@ void initGame(Game &game)
 
 }
 
-void draw(Game &game, graphic &g)
+void drawGame(Game &game, graphic &g)
 {
     SDL_RenderClear(g.renderer); // xoa man hinh
     drawline_2(g);
 
     SDL_SetRenderDrawColor(g.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
 
-    // ve cac rect
     for (int i = 0; i < 4; i ++)
     {
         for (int j = 0; j < 4; j ++)
@@ -409,29 +410,16 @@ void draw(Game &game, graphic &g)
         }
     }
 
-    // ve hinh minh hoa
-    int x = 4.5 * window_cell_width;
-    int width = 1.5 * window_cell_width;
-    int height = 1.5 * window_cell_height;
+    draw_illustration(g);
 
-    SDL_Rect destRect = {x, 0, width, height};
+    draw_text(g, game, "Turn Moves: ", 4.45 * window_cell_width, 2 * window_cell_height);
 
-    SDL_Rect srcRect = g.spriteRects[sprite_all];
-
-    SDL_RenderCopy(g.renderer, g.spriteTexture, &srcRect, &destRect);
-
-    // so lan di chuyen
-    draw_text(g, "Turn Moves: ", 4.45 * window_cell_width, 2 * window_cell_height);
-
-    // check win and play again
     if (check_win(game))
     {
-        draw_text(g, "YOU WIN!" , 4.5 * window_cell_width, 2.5 * window_cell_height);
-        draw_text(g, "Press Enter To Play Again" , 4.4 * window_cell_width, 2.9 * window_cell_height);
+        draw_text(g, game, "YOU WIN!" , 4.5 * window_cell_width, 2.5 * window_cell_height);
+        draw_text(g, game, "Press Enter To Play Again" , 4.4 * window_cell_width, 2.9 * window_cell_height);
     }
 
-
-    // in ra nhung gi vua ve
     SDL_RenderPresent(g.renderer);
 
 }
@@ -475,12 +463,12 @@ void updateGame(Game &game, SDL_Event &event)
         if (game.cells[x3][x4] == 0 and (x1 == x3 or x2 == x4) and (abs(x1 - x3) == 1 or abs(x2 - x4) == 1))
         {
             swap(game.cells[x1][x2], game.cells[x3][x4]);
-            turn_move ++;
+            game.turn_move ++;
         }
     }
 }
 
-void draw_text(graphic &g, string text, int x, int y)
+void draw_text(graphic &g, Game &game, string text, int x, int y)
 {
     SDL_Color color = {243, 156, 0};
     SDL_Rect src;
@@ -493,7 +481,7 @@ void draw_text(graphic &g, string text, int x, int y)
     {
         string turn_text;
         ostringstream convert;
-        convert << turn_move;
+        convert << game.turn_move;
         turn_text = convert.str();
         text = text + turn_text;
     }
@@ -526,6 +514,19 @@ void draw_text(graphic &g, string text, int x, int y)
     SDL_DestroyTexture(texture);
 }
 
+void draw_illustration(graphic &g)
+{
+    int x = 4.5 * window_cell_width;
+    int w = 1.5 * window_cell_width;
+    int h = 1.5 * window_cell_height;
+
+    SDL_Rect destRect = {x, 0, w, h};
+
+    SDL_Rect srcRect = g.spriteRects[sprite_all];
+
+    SDL_RenderCopy(g.renderer, g.spriteTexture, &srcRect, &destRect);
+}
+
 bool check_win(Game &game)
 {
     int number = 1;
@@ -548,18 +549,16 @@ void drawline(graphic &g)
         SDL_SetRenderDrawColor(g.renderer, 255, 55, 255, SDL_ALPHA_OPAQUE);
         for (int i =0; i < 4 * window_cell_height; i ++)
         {
-            if (i >= 1.5 * window_cell_height + 25)
+            if (i >= 1.5 * window_cell_height)
             {
                 for (int j = 0; j < 5 * num_line; j += 5)
                 {
                     SDL_RenderDrawLine(g.renderer,
-                                       i + 25 + 2.5 * window_cell_height,
+                                       i + 50 + 2.5 * window_cell_height,
                                        1.5 * window_cell_height + 25 + j,
-                                       i + 25 + 2.5 * window_cell_height,
+                                       i + 50 + 2.5 * window_cell_height,
                                        1.5 * window_cell_height + 25 + j);
                 }
-
-
             }
 
             for (int j = 0; j < 5 * num_line; j += 5)
@@ -571,12 +570,9 @@ void drawline(graphic &g)
                                    i + 2);
             }
 
-
             SDL_RenderPresent(g.renderer);
             SDL_Delay(3);
        }
-
-
 }
 
 void drawline_2(graphic &g)
@@ -599,7 +595,21 @@ void drawline_2(graphic &g)
                                    4 * window_cell_height + 40 + j,
                                    4 * window_cell_height);
             }
+}
 
+void autoWin(Game &game, SDL_Event &event)
+{
+    int tmp = 1;
+
+    for (int i = 0; i < 4; i ++)
+    {
+        for (int j = 0; j < 4; j ++)
+        {
+            if (i == 3 and j == 3) game.cells[i][j] = 0;
+            else game.cells[i][j] = tmp;
+            tmp ++;
+        }
+    }
 }
 
 
