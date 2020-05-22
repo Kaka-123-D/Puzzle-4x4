@@ -21,7 +21,7 @@ const int sprite_cell_height = 125;
 const int window_cell_width = 150;
 const int window_cell_height = 150;
 
-const int font_size = 25;
+const int font_size = window_cell_height / 6.25;
 
 ////////////////////////kieu du lieu moi ///////////////////////////////
 
@@ -70,12 +70,11 @@ struct graphic
     TTF_Font* font;
     vector<SDL_Rect> spriteRects;
 };
-
 ////////////////////////////// Ham //////////////////////////////////
 
 bool initGraphic(graphic &g);
 
-void close(graphic &g); // huy cac khoi tao tu sdl
+void close(graphic &g);
 
 SDL_Texture* createTexture(SDL_Renderer *renderer, const string &path); // load anh tu path va tra ve texture
 
@@ -83,13 +82,15 @@ void initSpriteRects(vector<SDL_Rect> &rects); // luu vi tri cac hinh trong anh 
 
 void initGame(Game &game); // khoi tao game va cac o xep ngau nhien
 
+bool checkBoard(Game game);
+
 void drawGame(Game &game, graphic &g);  // hien thi game len cua so
 
 SDL_Rect getSpriteRect (const Game &game, const cellPos &pos, const vector<SDL_Rect> &spriteRects); // lay hinh se ve cho o o vi tri pos
 
 void updateGame(Game &game, SDL_Event &event); // cap nhat game khi co thao tac
 
-bool check_win(Game &game);  // return true neu win///
+bool check_win(Game game);
 
 void draw_text(graphic &g, Game &game, string text, int x, int y);
 
@@ -99,12 +100,13 @@ void drawline(graphic &g);
 
 void drawline_2(graphic &g);
 
-string randomSprite(); //chon ngau nhien anh de choi
+string randomImage();
 
 void autoWin(Game &game, SDL_Event &event);
 
-//////////////////////ham main
-///////////////////////////////////
+void err(const string &m);
+
+//////////////////////ham main///////////////////////////////////
 
 int main(int argc, char* argv[])
 {
@@ -112,19 +114,20 @@ int main(int argc, char* argv[])
 
     while (again)
     {
-        sprite_path = randomSprite();
+        sprite_path = randomImage();
 
         graphic g;
         if (!initGraphic(g))
-           {
+        {
               close(g);
               return 1;
-           }
-
-        drawline(g);
+        }
 
         Game game;
         initGame(game);
+        while (!checkBoard(game)) initGame(game);
+
+        drawline(g);
 
         bool running = true;
         while (running)
@@ -150,21 +153,18 @@ int main(int argc, char* argv[])
 
                           if (event.type == SDL_KEYDOWN and event.key.keysym.sym == SDLK_LCTRL) autoWin(game, event);
                           else updateGame(game, event);
-
                       }
             }
         close(g);
     }
-
     return 0;
 }
 
 /////////////////////////////////////////////////////////////////////
 
-string randomSprite()
+string randomImage()
 {
     int temp = 1 + rand() % 4;
-
     switch (temp)
     {
         case 1: return "sprite/doremon.png";
@@ -185,19 +185,19 @@ bool initGraphic(graphic &g)
 
     if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
     {
-        cout << "error SDL";
+        err("SDL");
         return false;
     }
 
     if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG))
     {
-        cout << "error SDL_Image";
+        cout << "SDL_Image";
         return false;
     }
 
     if (TTF_Init() < 0)
     {
-        cout << "error SDL_ttf";
+        cout << "SDL_ttf";
         return false;
     }
 
@@ -210,7 +210,7 @@ bool initGraphic(graphic &g)
 
     if (g.window == NULL)
     {
-        cout << "error open window";
+        err("Window could not be created") ;
         return false;
     }
 
@@ -218,7 +218,7 @@ bool initGraphic(graphic &g)
 
     if (g.renderer == NULL)
     {
-        cout << "error create renderer";
+        err("Renderer could not be created") ;
         return false;
     }
 
@@ -226,7 +226,7 @@ bool initGraphic(graphic &g)
 
     if (g.spriteTexture == NULL)
     {
-        cout << "unable to create texture";
+        err("Unable to create texture from " + sprite_path);
         return false;
     }
 
@@ -236,7 +236,7 @@ bool initGraphic(graphic &g)
 
     if (g.font == NULL)
     {
-        cout << "error font";
+        err("Font");
         return false;
     }
 
@@ -259,7 +259,7 @@ SDL_Texture* createTexture(SDL_Renderer *renderer, const string &path)
     SDL_Surface* surface = IMG_Load(path.c_str());
     if (surface == NULL)
     {
-        cout << "error load image";
+        err("Load image");
         return NULL;
     }
 
@@ -369,8 +369,8 @@ void initGame(Game &game)
     game.turn_move = 0;
     game.cells = celltable(4, vector<int> (4));
 
-    bool choose[17];
-    for (int i = 0; i < 17; i ++) choose[i] = false;
+    bool choose[16];
+    for (int i = 0; i < 16; i ++) choose[i] = false;
 
     for (int i = 0; i < 4; i ++ )
     {
@@ -386,15 +386,41 @@ void initGame(Game &game)
             }
         }
     }
+}
 
+bool checkBoard(Game game)
+{
+    int N = 0;
+    int row_empty;
+
+    for (int i = 0; i < 16; i ++)
+    {
+        int tmp = 0;
+        if (game.cells[i / 4][i % 4] == 0)
+        {
+            row_empty = i / 4;
+        }
+        else
+        {
+            for (int j = i + 1; j < 16; j ++)
+            {
+                if (game.cells[j / 4][j % 4] < game.cells[i / 4][i % 4]
+                   and game.cells[j / 4][j % 4] != 0)
+                {
+                    tmp ++;
+                }
+            }
+        }
+    }
+
+    if ((row_empty % 2 == 1 and N % 2 == 0) or (row_empty % 2 == 0 and N % 2 == 1)) return true;
+    return false;
 }
 
 void drawGame(Game &game, graphic &g)
 {
-    SDL_RenderClear(g.renderer); // xoa man hinh
+    SDL_RenderClear(g.renderer);
     drawline_2(g);
-
-    SDL_SetRenderDrawColor(g.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
 
     for (int i = 0; i < 4; i ++)
     {
@@ -412,16 +438,15 @@ void drawGame(Game &game, graphic &g)
 
     draw_illustration(g);
 
-    draw_text(g, game, "Turn Moves: ", 4.45 * window_cell_width, 2 * window_cell_height);
+    draw_text(g, game, "Turn Moves: ", 4.55 * window_cell_width, 2 * window_cell_height);
 
     if (check_win(game))
     {
-        draw_text(g, game, "YOU WIN!" , 4.5 * window_cell_width, 2.5 * window_cell_height);
-        draw_text(g, game, "Press Enter To Play Again" , 4.4 * window_cell_width, 2.9 * window_cell_height);
+        draw_text(g, game, "YOU WIN!" , 4.55 * window_cell_width, 2.5 * window_cell_height);
+        draw_text(g, game, "Press Enter To Play Again" , 4.48 * window_cell_width, 2.9 * window_cell_height);
     }
 
     SDL_RenderPresent(g.renderer);
-
 }
 
 SDL_Rect getSpriteRect(const Game &game,const cellPos &pos, const vector<SDL_Rect> &spriteRects)
@@ -444,6 +469,7 @@ void updateGame(Game &game, SDL_Event &event)
         int col = mouse.x / window_cell_width;
 
         game.first_click = (cellPos) {row, col};
+
     }
 
     if (event.type == SDL_MOUSEBUTTONUP)
@@ -460,7 +486,8 @@ void updateGame(Game &game, SDL_Event &event)
         int x3 = game.last_click.row;
         int x4 = game.last_click.col;
 
-        if (game.cells[x3][x4] == 0 and (x1 == x3 or x2 == x4) and (abs(x1 - x3) == 1 or abs(x2 - x4) == 1))
+        if (game.cells[x3][x4] == 0 and (x1 == x3 or x2 == x4) and
+           (abs(x1 - x3) == 1 or abs(x2 - x4) == 1) and (x1 < 4 and x2 < 4))
         {
             swap(game.cells[x1][x2], game.cells[x3][x4]);
             game.turn_move ++;
@@ -527,7 +554,7 @@ void draw_illustration(graphic &g)
     SDL_RenderCopy(g.renderer, g.spriteTexture, &srcRect, &destRect);
 }
 
-bool check_win(Game &game)
+bool check_win(Game game)
 {
     int number = 1;
     for (int i = 0; i < 4; i ++)
@@ -554,25 +581,26 @@ void drawline(graphic &g)
                 for (int j = 0; j < 5 * num_line; j += 5)
                 {
                     SDL_RenderDrawLine(g.renderer,
-                                       i + 50 + 2.5 * window_cell_height,
-                                       1.5 * window_cell_height + 25 + j,
-                                       i + 50 + 2.5 * window_cell_height,
-                                       1.5 * window_cell_height + 25 + j);
+                                       i + 2.8 * window_cell_height,
+                                       1.65 * window_cell_height + j,
+                                       i + 2.8 * window_cell_height,
+                                       1.65 * window_cell_height + j);
                 }
             }
 
             for (int j = 0; j < 5 * num_line; j += 5)
             {
                 SDL_RenderDrawLine(g.renderer,
-                                   4 * window_cell_height + 40 + j,
+                                   4.3 * window_cell_height + j,
                                    i,
-                                   4 * window_cell_height + 40 + j,
+                                   4.3 * window_cell_height + j,
                                    i + 2);
             }
 
             SDL_RenderPresent(g.renderer);
             SDL_Delay(3);
        }
+       SDL_SetRenderDrawColor(g.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
 }
 
 void drawline_2(graphic &g)
@@ -581,20 +609,21 @@ void drawline_2(graphic &g)
             for (int j = 0; j < 5 * num_line; j += 5)
                 {
                     SDL_RenderDrawLine(g.renderer,
-                                       50 + 4 * window_cell_height,
-                                       1.5 * window_cell_height + 25 + j,
-                                       50 + 6 * window_cell_height,
-                                       1.5 * window_cell_height + 25 + j);
+                                       4.3 * window_cell_height,
+                                       1.65 * window_cell_height + j,
+                                       6.3 * window_cell_height,
+                                       1.65 * window_cell_height + j);
                 }
 
             for (int j = 0; j < 5 * num_line; j += 5)
             {
                 SDL_RenderDrawLine(g.renderer,
-                                   4 * window_cell_height + 40 + j,
+                                   4.3 * window_cell_height + j,
                                    0,
-                                   4 * window_cell_height + 40 + j,
-                                   4 * window_cell_height);
+                                   4.3 * window_cell_height + j,
+                                   4.3 * window_cell_height);
             }
+            SDL_SetRenderDrawColor(g.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
 }
 
 void autoWin(Game &game, SDL_Event &event)
@@ -610,6 +639,11 @@ void autoWin(Game &game, SDL_Event &event)
             tmp ++;
         }
     }
+}
+
+void err(const string &m)
+{
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", m.c_str(), NULL);
 }
 
 
