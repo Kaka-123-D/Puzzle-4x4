@@ -59,7 +59,11 @@ struct Game
    celltable cells;
    cellPos first_click;
    cellPos last_click;
+   cellPos mousePiece;
+   cellPos mouse_onRect;
    int turn_move;
+   int pick;
+   bool motion;
 };
 
 struct graphic
@@ -86,11 +90,15 @@ bool checkBoard(Game game);
 
 void drawGame(Game &game, graphic &g);  // hien thi game len cua so
 
+void getPieceMotion(graphic &g,Game &game);
+
 SDL_Rect getSpriteRect (const Game &game, const cellPos &pos, const vector<SDL_Rect> &spriteRects); // lay hinh se ve cho o o vi tri pos
 
 void updateGame(Game &game, SDL_Event &event); // cap nhat game khi co thao tac
 
 bool check_win(Game game);
+
+void getPiece(graphic &g, Game &game, int y, int x);
 
 void draw_text(graphic &g, Game &game, string text, int x, int y);
 
@@ -367,6 +375,8 @@ void initSpriteRects(vector<SDL_Rect> &rects)
 void initGame(Game &game)
 {
     game.turn_move = 0;
+    game.motion = false;
+    game.pick = -1;
     game.cells = celltable(4, vector<int> (4));
 
     bool choose[16];
@@ -422,18 +432,9 @@ void drawGame(Game &game, graphic &g)
     SDL_RenderClear(g.renderer);
     drawline_2(g);
 
-    for (int i = 0; i < 4; i ++)
+    for (int i = 0; i < 16; i ++)
     {
-        for (int j = 0; j < 4; j ++)
-        {
-            SDL_Rect destRect ={j * window_cell_width, i * window_cell_height, window_cell_width, window_cell_height};
-
-            cellPos pos = {i, j};
-
-            SDL_Rect srcRect = getSpriteRect(game, pos, g.spriteRects);
-
-            SDL_RenderCopy(g.renderer, g.spriteTexture, &srcRect, &destRect);
-        }
+            getPiece(g, game, i / 4, i % 4);
     }
 
     draw_illustration(g);
@@ -445,6 +446,8 @@ void drawGame(Game &game, graphic &g)
         draw_text(g, game, "YOU WIN!" , 4.55 * window_cell_width, 2.5 * window_cell_height);
         draw_text(g, game, "Press Enter To Play Again" , 4.48 * window_cell_width, 2.9 * window_cell_height);
     }
+
+    if (game.motion) getPieceMotion(g, game);
 
     SDL_RenderPresent(g.renderer);
 }
@@ -459,6 +462,26 @@ SDL_Rect getSpriteRect(const Game &game,const cellPos &pos, const vector<SDL_Rec
     }
 }
 
+void getPiece(graphic &g, Game &game, int y, int x)
+{
+        SDL_Rect destRect ={x * window_cell_width, y * window_cell_height, window_cell_width, window_cell_height};
+
+        cellPos pos = {y, x};
+
+        SDL_Rect srcRect = getSpriteRect(game, pos, g.spriteRects);
+
+        SDL_RenderCopy(g.renderer, g.spriteTexture, &srcRect, &destRect);
+}
+
+void getPieceMotion(graphic &g, Game &game)
+{
+     SDL_Rect destRect ={game.mousePiece.col, game.mousePiece.row, window_cell_width, window_cell_height};
+
+     SDL_Rect srcRect = g.spriteRects[game.pick - 1];
+
+     SDL_RenderCopy(g.renderer, g.spriteTexture, &srcRect, &destRect);
+}
+
 void updateGame(Game &game, SDL_Event &event)
 {
     if (event.type == SDL_MOUSEBUTTONDOWN)
@@ -468,12 +491,30 @@ void updateGame(Game &game, SDL_Event &event)
         int row = mouse.y / window_cell_height;
         int col = mouse.x / window_cell_width;
 
-        game.first_click = (cellPos) {row, col};
+        if (row < 4 and col < 4)
+        {
+            game.first_click = (cellPos) {row, col};
 
+            game.pick = game.cells[row][col];
+            game.cells[row][col] = 0;
+
+            game.mouse_onRect.row = mouse.y - row * window_cell_height;
+            game.mouse_onRect.col = mouse.x - col * window_cell_width;
+
+            game.motion = true;
+        }
+    }
+
+    if (event.type == SDL_MOUSEMOTION)
+    {
+            game.mousePiece.col = event.motion.x - game.mouse_onRect.col;
+            game.mousePiece.row = event.motion.y - game.mouse_onRect.row;
     }
 
     if (event.type == SDL_MOUSEBUTTONUP)
     {
+        game.motion = false;
+
         SDL_MouseButtonEvent mouse = event.button;
 
         int row = mouse.y / window_cell_height;
@@ -486,12 +527,21 @@ void updateGame(Game &game, SDL_Event &event)
         int x3 = game.last_click.row;
         int x4 = game.last_click.col;
 
-        if (game.cells[x3][x4] == 0 and (x1 == x3 or x2 == x4) and
-           (abs(x1 - x3) == 1 or abs(x2 - x4) == 1) and (x1 < 4 and x2 < 4))
+        game.cells[x1][x2] = game.pick;
+
+        if (x3 < 4 and x4 < 4)
         {
-            swap(game.cells[x1][x2], game.cells[x3][x4]);
-            game.turn_move ++;
+            game.pick = 0;
+            if (game.cells[x3][x4] == 0 and (x1 == x3 or x2 == x4) and
+               (abs(x1 - x3) == 1 or abs(x2 - x4) == 1) and (x1 < 4 and x2 < 4))
+            {
+               swap(game.cells[x1][x2], game.cells[x3][x4]);
+               game.turn_move ++;
+            }
         }
+
+
+
     }
 }
 
