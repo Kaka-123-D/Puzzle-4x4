@@ -133,7 +133,13 @@ int main(int argc, char* argv[])
 
         Game game;
         initGame(game);
-        while (!checkBoard(game)) initGame(game);
+        int i = 0;
+        while (!checkBoard(game))
+        {
+            initGame(game);
+            i ++;
+        }
+        cout << i;
 
         drawline(g);
 
@@ -488,21 +494,26 @@ void updateGame(Game &game, SDL_Event &event)
     {
         SDL_MouseButtonEvent mouse = event.button;
 
-        int row = mouse.y / window_cell_height;
-        int col = mouse.x / window_cell_width;
-
-        if (row < 4 and col < 4)
+        if (mouse.button == SDL_BUTTON_LEFT)
         {
+            int row = mouse.y / window_cell_height;
+            int col = mouse.x / window_cell_width;
+
             game.first_click = (cellPos) {row, col};
 
-            game.pick = game.cells[row][col];
-            game.cells[row][col] = 0;
+            if (row < 4 and col < 4)
+            {
+                 game.pick = game.cells[row][col];
+                 game.cells[row][col] = 0;
 
-            game.mouse_onRect.row = mouse.y - row * window_cell_height;
-            game.mouse_onRect.col = mouse.x - col * window_cell_width;
+                 game.mouse_onRect.row = mouse.y - row * window_cell_height;
+                 game.mouse_onRect.col = mouse.x - col * window_cell_width;
 
-            game.motion = true;
+                 game.motion = true;
+            }
         }
+
+
     }
 
     if (event.type == SDL_MOUSEMOTION)
@@ -513,35 +524,36 @@ void updateGame(Game &game, SDL_Event &event)
 
     if (event.type == SDL_MOUSEBUTTONUP)
     {
-        game.motion = false;
-
         SDL_MouseButtonEvent mouse = event.button;
-
-        int row = mouse.y / window_cell_height;
-        int col = mouse.x / window_cell_width;
-
-        game.last_click = (cellPos) {row, col};
-
-        int x1 = game.first_click.row;
-        int x2 = game.first_click.col;
-        int x3 = game.last_click.row;
-        int x4 = game.last_click.col;
-
-        game.cells[x1][x2] = game.pick;
-
-        if (x3 < 4 and x4 < 4)
+        if (mouse.button == SDL_BUTTON_LEFT)
         {
-            game.pick = 0;
-            if (game.cells[x3][x4] == 0 and (x1 == x3 or x2 == x4) and
-               (abs(x1 - x3) == 1 or abs(x2 - x4) == 1) and (x1 < 4 and x2 < 4))
+            game.motion = false;
+
+            int row = mouse.y / window_cell_height;
+            int col = mouse.x / window_cell_width;
+
+            game.last_click = (cellPos) {row, col};
+
+            int x1 = game.first_click.row;
+            int x2 = game.first_click.col;
+            int x3 = game.last_click.row;
+            int x4 = game.last_click.col;
+
+            game.cells[x1][x2] = game.pick;
+
+            if (x3 < 4 and x4 < 4)
             {
-               swap(game.cells[x1][x2], game.cells[x3][x4]);
-               game.turn_move ++;
+                 game.pick = 0;
+                 if (game.cells[x3][x4] == 0
+                    and (x1 == x3 or x2 == x4)
+                    and (abs(x1 - x3) == 1 or abs(x2 - x4) == 1)
+                    and (x1 < 4 and x2 < 4))
+                    {
+                      swap(game.cells[x1][x2], game.cells[x3][x4]);
+                      game.turn_move ++;
+                    }
             }
         }
-
-
-
     }
 }
 
