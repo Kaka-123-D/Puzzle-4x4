@@ -4,6 +4,7 @@
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_ttf.h>
+#include <SDL_mixer.h>
 #include <vector>
 #include <string>
 #include <sstream>
@@ -14,6 +15,8 @@ bool again = true;
 int num_line = 3;
 
 string sprite_path;
+string music_path;
+
 const string screen_title   = "Puzzle 4x4";
 
 const int sprite_cell_width = 125;
@@ -72,6 +75,9 @@ struct graphic
     SDL_Renderer* renderer;
     SDL_Texture *spriteTexture;
     TTF_Font* font;
+    Mix_Music* music;
+    Mix_Chunk* chunk;
+    Mix_Chunk* music_hola;
     vector<SDL_Rect> spriteRects;
 };
 ////////////////////////////// Ham //////////////////////////////////
@@ -94,7 +100,7 @@ void getPieceMotion(graphic &g,Game &game);
 
 SDL_Rect getSpriteRect (const Game &game, const cellPos &pos, const vector<SDL_Rect> &spriteRects); // lay hinh se ve cho o o vi tri pos
 
-void updateGame(Game &game, SDL_Event &event); // cap nhat game khi co thao tac
+void updateGame(Game &game, SDL_Event &event, graphic &g); // cap nhat game khi co thao tac
 
 bool check_win(Game game);
 
@@ -110,7 +116,9 @@ void drawline_2(graphic &g);
 
 string randomImage();
 
-void autoWin(Game &game, SDL_Event &event);
+string randomMusic();
+
+void autoWin(graphic &g, Game &game, SDL_Event &event);
 
 void err(const string &m);
 
@@ -123,6 +131,7 @@ int main(int argc, char* argv[])
     while (again)
     {
         sprite_path = randomImage();
+        music_path = randomMusic();
 
         graphic g;
         if (!initGraphic(g))
@@ -133,15 +142,13 @@ int main(int argc, char* argv[])
 
         Game game;
         initGame(game);
-        int i = 0;
         while (!checkBoard(game))
         {
             initGame(game);
-            i ++;
         }
-        cout << i;
 
         drawline(g);
+        if (!Mix_PlayingMusic()) Mix_PlayMusic(g.music, -1);
 
         bool running = true;
         while (running)
@@ -158,15 +165,20 @@ int main(int argc, char* argv[])
                                  break;
                              }
 
-                          if (check_win(game) and event.type == SDL_KEYDOWN and event.key.keysym.sym == SDLK_RETURN)
+                          if (check_win(game))
                           {
-                              running = false;
-                              game.turn_move = 0;
-                              break;
+                              if (event.type == SDL_KEYDOWN and event.key.keysym.sym == SDLK_RETURN)
+                              {
+                                  running = false;
+                                  game.turn_move = 0;
+                                  break;
+                              }
                           }
-
-                          if (event.type == SDL_KEYDOWN and event.key.keysym.sym == SDLK_LCTRL) autoWin(game, event);
-                          else updateGame(game, event);
+                          else
+                          {
+                              if (event.type == SDL_KEYDOWN and event.key.keysym.sym == SDLK_LCTRL) autoWin(g, game, event);
+                              else updateGame(game, event, g);
+                          }
                       }
             }
         close(g);
@@ -178,13 +190,26 @@ int main(int argc, char* argv[])
 
 string randomImage()
 {
-    int temp = 1 + rand() % 4;
-    switch (temp)
+    int tmp = 1 + rand() % 4;
+    switch (tmp)
     {
         case 1: return "sprite/doremon.png";
         case 2: return "sprite/hiroomi.png";
         case 3: return "sprite/pikachu.png";
         case 4: return "sprite/board_game.png";
+
+        default: break;
+    }
+}
+
+string randomMusic()
+{
+    int temp = 1 + rand() % 3;
+    switch (temp)
+    {
+        case 1: return "music/music1.mp3";
+        case 2: return "music/music2.mp3";
+        case 3: return "music/music3.mp3";
 
         default: break;
     }
@@ -196,22 +221,35 @@ bool initGraphic(graphic &g)
     g.renderer = NULL;
     g.spriteTexture = NULL;
     g.font = NULL;
+    g.music = NULL;
+    g.chunk = NULL;
+    g.music_hola = NULL;
 
     if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
     {
-        err("SDL");
+        string m = SDL_GetError();
+        err(m);
         return false;
     }
 
     if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG))
     {
-        cout << "SDL_Image";
+        string m = SDL_GetError();
+        err(m);
         return false;
     }
 
     if (TTF_Init() < 0)
     {
-        cout << "SDL_ttf";
+        string m = SDL_GetError();
+        err(m) ;
+        return false;
+    }
+
+    if (Mix_OpenAudio(MIX_DEFAULT_FREQUENCY, MIX_DEFAULT_FORMAT, MIX_DEFAULT_CHANNELS, 4096) != 0)
+    {
+        string m = SDL_GetError();
+        err(m);
         return false;
     }
 
@@ -224,35 +262,60 @@ bool initGraphic(graphic &g)
 
     if (g.window == NULL)
     {
-        err("Window could not be created") ;
+        string m = SDL_GetError();
+        err(m) ;
         return false;
     }
 
     g.renderer = SDL_CreateRenderer(g.window, -1, SDL_RENDERER_ACCELERATED);
-
     if (g.renderer == NULL)
     {
-        err("Renderer could not be created") ;
+        string m = SDL_GetError();
+        err(m) ;
         return false;
     }
 
     g.spriteTexture = createTexture(g.renderer, sprite_path);
-
     if (g.spriteTexture == NULL)
     {
-        err("Unable to create texture from " + sprite_path);
+        string m = SDL_GetError();
+        err(m);
         return false;
     }
 
     initSpriteRects(g.spriteRects);
 
     g.font = TTF_OpenFont("font/VeraMoBd.ttf", font_size);
-
     if (g.font == NULL)
     {
-        err("Font");
+        string m = SDL_GetError();
+        err(m);
         return false;
     }
+
+    g.music = Mix_LoadMUS(music_path.c_str());
+    if (g.music == NULL)
+    {
+        string m = SDL_GetError();
+        err(m);
+        return false;
+    }
+
+    g.chunk = Mix_LoadWAV("music/nope.wav");
+	if (g.chunk == NULL)
+	{
+		string m = SDL_GetError();
+        err("bbb");
+        return false;
+	}
+
+	g.music_hola = Mix_LoadWAV("music/hola.wav");
+	if (g.music_hola == NULL)
+	{
+		string m = SDL_GetError();
+        err(m);
+        return false;
+	}
 
     return true;
 }
@@ -262,6 +325,19 @@ void close(graphic &g)
     SDL_DestroyWindow(g.window);
     SDL_DestroyRenderer(g.renderer);
     SDL_DestroyTexture(g.spriteTexture);
+    Mix_FreeMusic(g.music);
+    Mix_FreeChunk(g.chunk);
+    Mix_FreeChunk(g.music_hola);
+    TTF_CloseFont(g.font);
+
+    g.window = NULL;
+    g.renderer = NULL;
+    g.spriteTexture = NULL;
+    g.music = NULL;
+    g.chunk = NULL;
+    g.music_hola = NULL;
+    g.font = NULL;
+    g.spriteRects.clear();
 
     TTF_Quit();
     IMG_Quit();
@@ -273,7 +349,8 @@ SDL_Texture* createTexture(SDL_Renderer *renderer, const string &path)
     SDL_Surface* surface = IMG_Load(path.c_str());
     if (surface == NULL)
     {
-        err("Load image");
+        string m = SDL_GetError();
+        err(m);
         return NULL;
     }
 
@@ -488,7 +565,7 @@ void getPieceMotion(graphic &g, Game &game)
      SDL_RenderCopy(g.renderer, g.spriteTexture, &srcRect, &destRect);
 }
 
-void updateGame(Game &game, SDL_Event &event)
+void updateGame(Game &game, SDL_Event &event, graphic &g)
 {
     if (event.type == SDL_MOUSEBUTTONDOWN)
     {
@@ -551,6 +628,13 @@ void updateGame(Game &game, SDL_Event &event)
                     {
                       swap(game.cells[x1][x2], game.cells[x3][x4]);
                       game.turn_move ++;
+
+                      if (check_win(game))
+                      {
+                          Mix_HaltMusic();
+                          if (Mix_Playing(-1)) Mix_PlayChannel(-1, g.music_hola, 0);
+                      }
+                      else Mix_PlayChannel(-1, g.chunk, 0);
                     }
             }
         }
@@ -636,7 +720,7 @@ bool check_win(Game game)
 void drawline(graphic &g)
 {
         SDL_SetRenderDrawColor(g.renderer, 255, 55, 255, SDL_ALPHA_OPAQUE);
-        for (int i =0; i < 4 * window_cell_height; i ++)
+        for (int i = 0; i < 4 * window_cell_height; i ++)
         {
             if (i >= 1.5 * window_cell_height)
             {
@@ -688,7 +772,7 @@ void drawline_2(graphic &g)
             SDL_SetRenderDrawColor(g.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
 }
 
-void autoWin(Game &game, SDL_Event &event)
+void autoWin(graphic &g, Game &game, SDL_Event &event)
 {
     int tmp = 1;
 
@@ -701,11 +785,13 @@ void autoWin(Game &game, SDL_Event &event)
             tmp ++;
         }
     }
+    Mix_HaltMusic();
+    Mix_PlayChannel(-1, g.music_hola, 0);
 }
 
 void err(const string &m)
 {
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", m.c_str(), NULL);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error ", m.c_str(), NULL);
 }
 
 
