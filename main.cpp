@@ -67,6 +67,9 @@ struct Game
    int turn_move;
    int pick;
    bool motion;
+   int timeLimit;
+   string timeNow;
+   bool lose;
 };
 
 struct graphic
@@ -107,6 +110,8 @@ bool check_win(Game game);
 void getPiece(graphic &g, Game &game, int y, int x);
 
 void draw_text(graphic &g, Game &game, string text, int x, int y);
+
+void draw_timelimit(graphic &g,Game &game);
 
 void draw_illustration(graphic &g);
 
@@ -150,6 +155,7 @@ int main(int argc, char* argv[])
         drawline(g);
         if (!Mix_PlayingMusic()) Mix_PlayMusic(g.music, -1);
 
+
         bool running = true;
         while (running)
             {
@@ -165,7 +171,7 @@ int main(int argc, char* argv[])
                                  break;
                              }
 
-                          if (check_win(game))
+                          if (check_win(game) or game.lose)
                           {
                               if (event.type == SDL_KEYDOWN and event.key.keysym.sym == SDLK_RETURN)
                               {
@@ -305,7 +311,7 @@ bool initGraphic(graphic &g)
 	if (g.chunk == NULL)
 	{
 		string m = SDL_GetError();
-        err("bbb");
+        err(m);
         return false;
 	}
 
@@ -339,6 +345,7 @@ void close(graphic &g)
     g.font = NULL;
     g.spriteRects.clear();
 
+    Mix_Quit();
     TTF_Quit();
     IMG_Quit();
     SDL_Quit();
@@ -457,6 +464,8 @@ void initSpriteRects(vector<SDL_Rect> &rects)
 
 void initGame(Game &game)
 {
+    game.timeLimit = 15 * 60 * 1000 + 3000;
+    game.lose = false;
     game.turn_move = 0;
     game.motion = false;
     game.pick = -1;
@@ -522,11 +531,19 @@ void drawGame(Game &game, graphic &g)
 
     draw_illustration(g);
 
-    draw_text(g, game, "Turn Moves: ", 4.55 * window_cell_width, 2 * window_cell_height);
+    draw_text(g, game, "Turn Moves: ", 4.45 * window_cell_width, 2 * window_cell_height);
+
+    draw_timelimit(g, game);
 
     if (check_win(game))
     {
         draw_text(g, game, "YOU WIN!" , 4.55 * window_cell_width, 2.5 * window_cell_height);
+        draw_text(g, game, "Press Enter To Play Again" , 4.48 * window_cell_width, 2.9 * window_cell_height);
+    }
+
+    if (game.lose)
+    {
+        draw_text(g, game, "YOU LOSE" , 4.55 * window_cell_width, 2.5 * window_cell_height);
         draw_text(g, game, "Press Enter To Play Again" , 4.48 * window_cell_width, 2.9 * window_cell_height);
     }
 
@@ -671,7 +688,7 @@ void draw_text(graphic &g, Game &game, string text, int x, int y)
     des.w = src.w;
     des.h = src.h;
 
-    if (text == "YOU WIN!")
+    if (text == "YOU WIN!" or text == "YOU LOSE")
     {
         des.w *= 1.8;
         des.h *= 1.8;
@@ -682,6 +699,57 @@ void draw_text(graphic &g, Game &game, string text, int x, int y)
         des.w /= 1.6;
         des.h /= 1.6;
     }
+
+    SDL_RenderCopy(g.renderer, texture, &src, &des);
+    SDL_DestroyTexture(texture);
+}
+
+void draw_timelimit(graphic &g, Game &game)
+{
+    SDL_Color color = {243, 156, 0};
+    SDL_Rect src;
+    SDL_Rect des;
+
+    des.x = 4.45 * window_cell_width;
+    des.y = 2.2 * window_cell_height;
+
+    if (!check_win(game))
+    {
+        game.timeNow =  "Time Limit ";
+
+        int now = game.timeLimit - SDL_GetTicks();
+        if (now < 0)
+        {
+             game.timeNow = game.timeNow + "00:00";
+             game.lose = true;
+        }
+        else
+        {
+             stringstream convert;
+             convert << now / 60000;
+             string tmp = convert.str();
+             if (tmp.length() == 1) tmp = "0" + tmp;
+             game.timeNow = game.timeNow + tmp + ":";
+
+             ostringstream convert2;
+             convert2 << (now % 60000) / 1000;
+             tmp = convert2.str();
+             if (tmp.length() == 1) tmp = "0" + tmp;
+             game.timeNow = game.timeNow + tmp;
+        }
+    }
+
+    SDL_Surface* surface = TTF_RenderText_Solid(g.font,game.timeNow.c_str(),color);
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(g.renderer, surface);
+    SDL_FreeSurface(surface);
+
+    TTF_SizeText(g.font,game.timeNow.c_str(), &src.w, &src.h);
+
+    src.x = 0;
+    src.y = 0;
+
+    des.w = src.w;
+    des.h = src.h;
 
     SDL_RenderCopy(g.renderer, texture, &src, &des);
     SDL_DestroyTexture(texture);
