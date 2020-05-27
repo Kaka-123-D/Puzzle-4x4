@@ -82,6 +82,8 @@ struct graphic
     Mix_Chunk* chunk;
     Mix_Chunk* music_hola;
     vector<SDL_Rect> spriteRects;
+
+    int timestart;
 };
 ////////////////////////////// Ham //////////////////////////////////
 
@@ -133,17 +135,22 @@ int main(int argc, char* argv[])
 {
     srand(time(NULL));
 
+    graphic g;
+
+    sprite_path = randomImage();
+    music_path = randomMusic();
+
+    if (!initGraphic(g))
+    {
+            close(g);
+            return EXIT_FAILURE;
+    }
+
     while (again)
     {
+        SDL_RenderClear(g.renderer);
         sprite_path = randomImage();
         music_path = randomMusic();
-
-        graphic g;
-        if (!initGraphic(g))
-        {
-              close(g);
-              return 1;
-        }
 
         Game game;
         initGame(game);
@@ -177,6 +184,8 @@ int main(int argc, char* argv[])
                               {
                                   running = false;
                                   game.turn_move = 0;
+                                  Mix_HaltChannel(-1);
+                                  g.timestart = SDL_GetTicks();
                                   break;
                               }
                           }
@@ -187,8 +196,8 @@ int main(int argc, char* argv[])
                           }
                       }
             }
-        close(g);
     }
+    close(g);
     return 0;
 }
 
@@ -223,6 +232,8 @@ string randomMusic()
 
 bool initGraphic(graphic &g)
 {
+    g.timestart = 0;
+
     g.window = NULL;
     g.renderer = NULL;
     g.spriteTexture = NULL;
@@ -717,7 +728,7 @@ void draw_timelimit(graphic &g, Game &game)
     {
         game.timeNow =  "Time Limit ";
 
-        int now = game.timeLimit - SDL_GetTicks();
+        int now = game.timeLimit - SDL_GetTicks() + g.timestart;
         if (now < 0)
         {
              game.timeNow = game.timeNow + "00:00";
@@ -743,7 +754,7 @@ void draw_timelimit(graphic &g, Game &game)
     SDL_Texture* texture = SDL_CreateTextureFromSurface(g.renderer, surface);
     SDL_FreeSurface(surface);
 
-    TTF_SizeText(g.font,game.timeNow.c_str(), &src.w, &src.h);
+    TTF_SizeText(g.font, game.timeNow.c_str(), &src.w, &src.h);
 
     src.x = 0;
     src.y = 0;
@@ -770,19 +781,12 @@ void draw_illustration(graphic &g)
 
 bool check_win(Game game)
 {
-    int number = 1;
-    for (int i = 0; i < 4; i ++)
+    for (int i = 0; i < 15; i ++)
     {
-        for (int j = 0; j < 4; j ++)
-        {
-            if (game.cells[i][j] == number)
-            {
-                number ++;
-                if (number == 4*4) return true;
-            }
-            else return false;
-        }
+        if (game.cells[i/4][i%4] != i+1) return false;
     }
+
+    return true;
 }
 
 void drawline(graphic &g)
